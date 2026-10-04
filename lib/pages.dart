@@ -23,8 +23,8 @@ class DashboardPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 22, 88),
       children: [
-        const Text("Dashboard", style: TextStyle(fontSize: 28, color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
-        const Text("Overview of your Granth collection", style: TextStyle(color: muted, fontFamily: "NotoSansDevanagari")),
+        const Text("Dashboard", style: pageTitle),
+        const Text("Overview of your Granth collection", style: subTitle),
         const SizedBox(height: 14),
         _dash(context, "Topics", app.topics.length, Icons.assignment_outlined, saffron, () => go(Dest.topics)),
         _dash(context, "Granths", app.granths.length, Icons.menu_book, maroon, () => go(Dest.granths)),
@@ -34,16 +34,24 @@ class DashboardPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("सत साहेब जी", style: TextStyle(fontSize: 20, color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
+              const Text("सत साहेब जी", style: TextStyle(fontSize: 22, height: 1.2, color: maroon, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
               const SizedBox(height: 8),
               const Text(
                 "जो प्रमाण समय पर याद नहीं रहते, यह ग्रंथ प्रबंधन उन्हें विषय और ग्रंथ के साथ एक जगह रखता है। पहली बार इंटरनेट पर खुलते ही विषय, ग्रंथ और प्रमाण इस डिवाइस पर सेव हो जाते हैं — उसके बाद ऐप बिना नेट के खुलता है।",
-                style: TextStyle(color: ink, height: 1.45, fontFamily: "NotoSansDevanagari"),
+                style: TextStyle(color: ink, height: 1.55, fontSize: 14, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari"),
               ),
               const SizedBox(height: 10),
               Pressable(
                 onTap: () => openExternal("mailto:sadgranthpraman@gmail.com"),
-                child: const Text("संपर्क: sadgranthpraman@gmail.com", style: TextStyle(color: maroon, decoration: TextDecoration.underline, fontFamily: "NotoSansDevanagari")),
+                child: const Text.rich(
+                  TextSpan(
+                    style: TextStyle(color: ink, fontSize: 14, fontFamily: "NotoSansDevanagari", decoration: TextDecoration.none),
+                    children: [
+                      TextSpan(text: "संपर्क: "),
+                      TextSpan(text: "sadgranthpraman@gmail.com", style: TextStyle(color: saffronDark, fontWeight: FontWeight.w600, decoration: TextDecoration.none)),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -70,8 +78,9 @@ class DashboardPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(count == 0 ? "—" : "$count", style: const TextStyle(fontSize: 28, color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
-                  Text(label, style: const TextStyle(color: brown, fontSize: 16, fontFamily: "NotoSansDevanagari")),
+                  Text(count == 0 ? "—" : "$count", style: const TextStyle(fontSize: 32, height: 1, color: maroon, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
+                  const SizedBox(height: 2),
+                  Text(label, style: const TextStyle(color: muted, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: "NotoSansDevanagari")),
                 ],
               ),
             ),
@@ -109,13 +118,16 @@ class TopicPage extends StatelessWidget {
           onTap: () => go(Dest("pramans", topicId: item.id)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text("${item.position}. ${item.title}", maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: maroon, fontSize: 16, fontWeight: FontWeight.w700, height: 1.35, fontFamily: "NotoSansDevanagari")),
+              Text("${item.position}. ${item.title}", style: cardTitle),
               if (item.description.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(item.description, maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, height: 1.35, fontFamily: "NotoSansDevanagari")),
+                Text(item.description, style: cardBody),
               ],
-              const Spacer(),
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: creamDark),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
@@ -164,19 +176,25 @@ class GranthPage extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: maroon, fontSize: 16, fontWeight: FontWeight.w700, height: 1.3, fontFamily: "NotoSansDevanagari")),
-              if (item.author.isNotEmpty) Text(item.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted, fontSize: 12, fontFamily: "NotoSansDevanagari")),
-              const SizedBox(height: 6),
-              Expanded(
-                child: Shot(
-                  path: item.imagePath,
-                  height: double.infinity,
-                  onTap: shots.isEmpty ? null : () => onOpen(shots),
-                  onSave: mediaPath(item.imagePath) == null ? null : () => onSaveImage(item.imagePath, item.title),
-                ),
+              Text(item.title, style: app.granthCols == 3 ? cardTitle.copyWith(fontSize: 13) : cardTitle.copyWith(fontSize: app.granthCols == 2 ? 15 : 16)),
+              if (item.author.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(item.author, style: authorStyle),
+              ],
+              if (item.description.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(item.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: cardBody),
+              ],
+              const SizedBox(height: 8),
+              Shot(
+                path: item.imagePath,
+                height: app.granthCols >= 3 ? 88 : 120,
+                onTap: shots.isEmpty ? null : () => onOpen(shots),
+                onSave: mediaPath(item.imagePath) == null ? null : () => onSaveImage(item.imagePath, item.title),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
@@ -265,18 +283,26 @@ class PramanPage extends StatelessWidget {
           onTap: shots.isEmpty ? null : () => onOpen(shots),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
-                  Expanded(child: Shot(path: item.granthImage, height: 72, onTap: shots.isEmpty ? null : () => onOpen(shots), onSave: mediaPath(item.granthImage) == null ? null : () => onSaveImage(item.granthImage, item.granthTitle))),
+                  SizedBox(width: 64, child: Shot(path: item.granthImage, height: 52, onTap: shots.isEmpty ? null : () => onOpen(shots), onSave: mediaPath(item.granthImage) == null ? null : () => onSaveImage(item.granthImage, item.granthTitle))),
                   const SizedBox(width: 6),
-                  Expanded(child: Shot(path: item.editorImagePath, height: 72, onTap: shots.isEmpty ? null : () => onOpen(shots))),
+                  SizedBox(width: 64, child: Shot(path: item.editorImagePath, height: 52, onTap: shots.isEmpty ? null : () => onOpen(shots))),
+                  if (item.favorite == "1") const Spacer(),
+                  if (item.favorite == "1") const Text("मुख्य", style: TextStyle(color: maroon, fontSize: 12, fontWeight: FontWeight.w600, fontFamily: "NotoSansDevanagari")),
                 ],
               ),
-              const SizedBox(height: 6),
-              Text(item.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: maroon, fontWeight: FontWeight.w700, height: 1.3, fontFamily: "NotoSansDevanagari")),
-              if (item.favorite == "1") const Text("मुख्य", style: TextStyle(color: saffronDark, fontSize: 12, fontFamily: "NotoSansDevanagari")),
-              const Spacer(),
+              const SizedBox(height: 8),
+              Text(item.title, style: cardTitle),
+              if (item.description.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(item.description, style: cardBody),
+              ],
+              const SizedBox(height: 8),
+              Shot(path: item.imagePath, height: 150, fit: BoxFit.contain, onTap: shots.isEmpty ? null : () => onOpen(shots), onSave: mediaPath(item.imagePath) == null ? null : () => onSaveImage(item.imagePath, item.title)),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
@@ -370,7 +396,7 @@ class _CatalogBrowserState<T> extends State<CatalogBrowser<T>> {
   @override
   Widget build(BuildContext context) {
     final rows = visible();
-    final aspect = widget.cols == 1 ? 0.78 : widget.cols == 2 ? 0.62 : 0.52;
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: creamDark, width: 1.5));
     return Column(
       children: [
         Padding(
@@ -378,33 +404,63 @@ class _CatalogBrowserState<T> extends State<CatalogBrowser<T>> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(widget.title, style: const TextStyle(fontSize: 26, color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
-              Text(widget.subtitle, style: const TextStyle(color: muted, fontFamily: "NotoSansDevanagari")),
-              const SizedBox(height: 8),
               Row(
                 children: [
-                  for (final size in widget.choices)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Pill("$size×$size", hot: widget.cols == size, onTap: () => widget.onCols(size)),
+                  _toneBox(widget.title),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.title, style: pageTitle),
+                        Text(widget.subtitle, style: subTitle),
+                      ],
                     ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: text,
-                style: const TextStyle(fontFamily: "NotoSansDevanagari", color: ink),
-                decoration: InputDecoration(
-                  hintText: widget.hint,
-                  hintStyle: const TextStyle(color: muted, fontFamily: "NotoSansDevanagari"),
-                  filled: true,
-                  fillColor: paper,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: creamDark)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: creamDark)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: gold, width: 1.4)),
-                ),
-                onChanged: (value) => setState(() => applied = value),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(10), border: Border.all(color: creamDark)),
+                    child: Row(
+                      children: [
+                        for (final size in widget.choices)
+                          Pressable(
+                            onTap: () => widget.onCols(size),
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 42, minHeight: 32),
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(color: widget.cols == size ? maroon : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+                              child: Text("$size×$size", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: widget.cols == size ? paper : maroon, fontFamily: "NotoSansDevanagari")),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: text,
+                      style: const TextStyle(fontFamily: "NotoSansDevanagari", color: ink, fontSize: 14, fontWeight: FontWeight.w400),
+                      decoration: InputDecoration(
+                        hintText: widget.hint,
+                        hintStyle: const TextStyle(color: muted, fontFamily: "NotoSansDevanagari", fontSize: 14),
+                        filled: true,
+                        fillColor: paper,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: border,
+                        enabledBorder: border,
+                        focusedBorder: border.copyWith(borderSide: const BorderSide(color: saffron, width: 1.5)),
+                      ),
+                      onChanged: (value) => setState(() => applied = value),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -413,25 +469,38 @@ class _CatalogBrowserState<T> extends State<CatalogBrowser<T>> {
         Expanded(
           child: Stack(
             children: [
-              rows.isEmpty
-                  ? ListView(controller: scroll, children: [
-                      const SizedBox(height: 40),
-                      Center(child: Text(widget.emptyTitle, style: const TextStyle(color: maroon, fontSize: 18, fontFamily: "NotoSansDevanagari"))),
-                      const SizedBox(height: 6),
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Text(widget.emptyBody, textAlign: TextAlign.center, style: const TextStyle(color: muted, fontFamily: "NotoSansDevanagari"))),
-                    ])
-                  : GridView.builder(
-                      controller: scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 4, 22, 88),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: widget.cols,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: aspect,
+              ListView.builder(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(12, 4, 16, 88),
+                itemCount: rows.isEmpty ? 1 : (rows.length / widget.cols).ceil(),
+                itemBuilder: (context, row) {
+                  if (rows.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 36),
+                      child: Column(
+                        children: [
+                          Text(widget.emptyTitle, style: pageTitle.copyWith(fontSize: 18)),
+                          const SizedBox(height: 6),
+                          Text(widget.emptyBody, textAlign: TextAlign.center, style: subTitle),
+                        ],
                       ),
-                      itemCount: rows.length,
-                      itemBuilder: (context, index) => widget.card(rows[index], index + 1, rows.length),
+                    );
+                  }
+                  final start = row * widget.cols;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var column = 0; column < widget.cols; column++) ...[
+                          if (column > 0) const SizedBox(width: 8),
+                          Expanded(child: start + column < rows.length ? widget.card(rows[start + column], start + column + 1, rows.length) : const SizedBox()),
+                        ],
+                      ],
                     ),
+                  );
+                },
+              ),
               ScrollRail(controller: scroll),
             ],
           ),
@@ -439,6 +508,24 @@ class _CatalogBrowserState<T> extends State<CatalogBrowser<T>> {
       ],
     );
   }
+}
+
+Widget _toneBox(String title) {
+  final goldTone = title.contains("प्रमाण");
+  final maroonTone = title == "Granths";
+  return Container(
+    width: 44,
+    height: 44,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: goldTone ? const [goldLight, gold] : maroonTone ? const [maroonLight, maroon] : const [saffron, saffronDark],
+      ),
+    ),
+    child: Icon(goldTone ? Icons.image_outlined : maroonTone ? Icons.menu_book : Icons.assignment_outlined, color: goldTone ? brown : paper, size: 22),
+  );
 }
 
 class GalleryPage extends StatefulWidget {
@@ -507,7 +594,7 @@ class GalleryPageState extends State<GalleryPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("ऐप गैलरी", style: TextStyle(fontSize: 26, color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
+              const Text("ऐप गैलरी", style: pageTitle),
               const SizedBox(height: 8),
               Row(
                 children: [

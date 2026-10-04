@@ -39,7 +39,7 @@ class AppModel extends ChangeNotifier {
 
   Future<void> boot() async {
     final prefs = await SharedPreferences.getInstance();
-    look = prefs.getString("granth-look") ?? "combo";
+    look = prefs.getString("granth-look") ?? "classic";
     pdfStyle = prefs.getString("pdf-style") ?? "fill90";
     topicCols = prefs.getInt("topic-cols") ?? 1;
     granthCols = prefs.getInt("granth-cols") ?? 2;

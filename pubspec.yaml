@@ -1,7 +1,7 @@
 name: granth_f
 description: Granth Prabandhan — Flutter app for topics, granths, pramans, offline pages and PDFs.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.13.5

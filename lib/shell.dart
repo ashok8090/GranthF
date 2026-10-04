@@ -227,6 +227,21 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
             child: Column(
               children: [
                 _mast(app),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Pressable(
+                      onTap: () => setState(() => menu = !menu),
+                      child: Container(
+                        width: 44,
+                        height: 40,
+                        decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(8), border: Border.all(color: creamDark)),
+                        child: Icon(menu ? Icons.close : Icons.menu, color: maroon, size: 22),
+                      ),
+                    ),
+                  ),
+                ),
                 _sync(app),
                 Expanded(
                   child: AnimatedSwitcher(
@@ -264,6 +279,18 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
     return DashboardPage(go: go);
   }
 
+  Widget _headButton(IconData icon, VoidCallback onTap) {
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0x88e2c97e))),
+        child: Icon(icon, color: goldLight, size: 20),
+      ),
+    );
+  }
+
   Widget _mast(AppModel app) {
     Widget stat(String which, String label, int count, Dest dest) {
       final on = headerOn(which);
@@ -275,15 +302,14 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
             margin: const EdgeInsets.symmetric(horizontal: 3),
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: on ? goldLight : const Color(0x55c9a84c)),
-              boxShadow: on ? const [BoxShadow(color: Color(0xccc9a84c), blurRadius: 16)] : null,
-              color: on ? const Color(0x33c9a84c) : const Color(0x22000000),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: on ? goldLight : const Color(0x59c9a84c)),
+              color: on ? const Color(0x47c9a84c) : const Color(0x0fffffff),
             ),
             child: Column(
               children: [
-                Text(count == 0 ? "—" : "$count", style: const TextStyle(color: goldLight, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
-                Text(label, textAlign: TextAlign.center, style: const TextStyle(color: goldLight, fontSize: 11, fontFamily: "NotoSansDevanagari")),
+                Text(count == 0 ? "—" : "$count", style: const TextStyle(color: goldLight, fontSize: 20, height: 1.1, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
+                Text(label, textAlign: TextAlign.center, style: const TextStyle(color: goldLight, fontSize: 10, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
               ],
             ),
           ),
@@ -304,16 +330,12 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
               Container(height: 3, margin: const EdgeInsets.only(bottom: 8), decoration: const BoxDecoration(gradient: LinearGradient(colors: [saffronDark, saffron, gold, saffron, saffronDark]))),
               Row(
                 children: [
-                  Pressable(
-                    onTap: home,
-                    child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.asset("assets/brand/logo.jpg", width: 42, height: 42, fit: BoxFit.cover)),
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(child: Text("ग्रंथ प्रबंधन", style: TextStyle(color: goldLight, fontSize: 22, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari"))),
-                  Pressable(onTap: () => go(Dest.gallery), child: const Icon(Icons.photo_library_outlined, color: goldLight)),
-                  const SizedBox(width: 2),
-                  Pressable(onTap: () => setState(() => settings = true), child: const Icon(Icons.settings, color: goldLight)),
-                  IconButton(onPressed: () => setState(() => menu = !menu), icon: Icon(menu ? Icons.close : Icons.menu, color: goldLight)),
+                  Pressable(onTap: home, child: const BrandMark()),
+                  const SizedBox(width: 10),
+                  const Expanded(child: Text("ग्रंथ प्रबंधन", style: TextStyle(color: goldLight, fontSize: 22, height: 1.15, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari"))),
+                  _headButton(Icons.photo_library_outlined, () => go(Dest.gallery)),
+                  const SizedBox(width: 6),
+                  _headButton(Icons.settings_outlined, () => setState(() => settings = true)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -352,7 +374,17 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
           Expanded(child: Text("$line${imageLabel.isEmpty ? "" : " · $imageLabel"}", style: const TextStyle(color: brown, fontSize: 12, fontFamily: "NotoSansDevanagari"))),
           Pressable(
             onTap: app.status == "syncing" ? null : () => app.sync(),
-            child: const Padding(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Text("सिंक", style: TextStyle(color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari"))),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(999), border: Border.all(color: creamDark)),
+              child: const Row(
+                children: [
+                  Icon(Icons.sync, size: 15, color: maroon),
+                  SizedBox(width: 4),
+                  Text("सिंक", style: TextStyle(color: maroon, fontSize: 13, fontWeight: FontWeight.w600, fontFamily: "NotoSansDevanagari")),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -665,9 +697,9 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ClipRRect(borderRadius: BorderRadius.circular(28), child: Image.asset("assets/brand/logo.jpg", width: 120, height: 120, fit: BoxFit.cover)),
+              ClipRRect(borderRadius: BorderRadius.circular(22), child: const BrandMark(size: 96)),
               const SizedBox(height: 16),
-              const Text("ग्रंथ प्रबंधन", style: TextStyle(color: goldLight, fontSize: 28, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
+              const Text("ग्रंथ प्रबंधन", style: TextStyle(color: goldLight, fontSize: 26, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
             ],
           ),
         ),

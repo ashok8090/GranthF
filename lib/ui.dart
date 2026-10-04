@@ -1,5 +1,6 @@
 import "dart:async";
 import "dart:io";
+import "dart:math" as math;
 
 import "package:flutter/material.dart";
 import "package:share_plus/share_plus.dart";
@@ -22,6 +23,51 @@ const muted = Color(0xff8b6a4a);
 const paper = Color(0xfffffdf7);
 const site = "https://granth.grok.me";
 
+const pageTitle = TextStyle(fontFamily: "NotoSansDevanagari", fontSize: 26, height: 1.1, fontWeight: FontWeight.w400, color: maroon);
+const subTitle = TextStyle(fontFamily: "NotoSansDevanagari", fontSize: 13, height: 1.3, fontWeight: FontWeight.w400, color: muted);
+const cardTitle = TextStyle(fontFamily: "NotoSansDevanagari", fontSize: 16, height: 1.4, fontWeight: FontWeight.w400, color: maroon);
+const cardBody = TextStyle(fontFamily: "NotoSansDevanagari", fontSize: 13, height: 1.5, fontWeight: FontWeight.w400, color: muted);
+const authorStyle = TextStyle(fontFamily: "NotoSansDevanagari", fontSize: 12, height: 1.3, fontWeight: FontWeight.w600, color: saffronDark);
+
+class BrandMark extends StatelessWidget {
+  const BrandMark({super.key, this.size = 46});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [saffron, gold]),
+      ),
+      alignment: Alignment.center,
+      child: CustomPaint(size: Size(size * 0.62, size * 0.62), painter: const _MalaPainter()),
+    );
+  }
+}
+
+class _MalaPainter extends CustomPainter {
+  const _MalaPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width * 0.34;
+    final bead = Paint()..color = maroon;
+    for (var i = 0; i < 12; i++) {
+      final angle = -1.5708 + i * 6.28318 / 12;
+      canvas.drawCircle(center + Offset(radius * math.cos(angle), radius * math.sin(angle)), 2.1, bead);
+    }
+    canvas.drawCircle(center, 3.4, Paint()..color = goldLight);
+    canvas.drawCircle(center, 3.4, Paint()..color = maroon..style = PaintingStyle.stroke..strokeWidth = 1);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 class PlaceMemory {
   static final offsets = <String, double>{};
   static final queries = <String, String>{};
@@ -30,7 +76,12 @@ class PlaceMemory {
 BoxDecoration cardDecoration(String look) {
   switch (look) {
     case "classic":
-      return BoxDecoration(color: paper, borderRadius: BorderRadius.circular(12), border: Border.all(color: creamDark));
+      return BoxDecoration(
+        color: paper,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: creamDark),
+        boxShadow: const [BoxShadow(color: Color(0x144a2c0a), blurRadius: 8, offset: Offset(0, 2))],
+      );
     case "bento":
       return BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -72,7 +123,6 @@ BoxDecoration cardDecoration(String look) {
     case "flat":
       return BoxDecoration(color: paper, borderRadius: BorderRadius.circular(4), border: Border.all(color: creamDark));
     case "combo":
-    default:
       return const BoxDecoration(
         borderRadius: BorderRadius.all(Radius.circular(26)),
         gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xfffffdf8), Color(0xfff8e7cf)]),
@@ -81,6 +131,13 @@ BoxDecoration cardDecoration(String look) {
           BoxShadow(color: Color(0x297b1f2e), offset: Offset(0, 8), blurRadius: 0),
           BoxShadow(color: Color(0x1f4a2c0a), blurRadius: 18, offset: Offset(0, 10)),
         ],
+      );
+    default:
+      return BoxDecoration(
+        color: paper,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: creamDark),
+        boxShadow: const [BoxShadow(color: Color(0x144a2c0a), blurRadius: 8, offset: Offset(0, 2))],
       );
   }
 }

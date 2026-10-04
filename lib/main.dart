@@ -27,6 +27,10 @@ class GranthRoot extends StatelessWidget {
         fontFamily: "NotoSansDevanagari",
         splashFactory: InkSparkle.splashFactory,
       ),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: const GranthApp(),
     );
   }

@@ -1,0 +1,36 @@
+name: granth_f
+description: Granth Prabandhan — Flutter app for topics, granths, pramans, offline pages and PDFs.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  app_links: ^6.4.0
+  http: ^1.5.0
+  image: ^4.5.4
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  pdf: ^3.11.3
+  share_plus: ^11.0.0
+  shared_preferences: ^2.5.3
+  sqflite: ^2.4.2
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/brand/logo.jpg
+    - assets/fonts/NotoSansDevanagari-Regular.ttf
+  fonts:
+    - family: NotoSansDevanagari
+      fonts:
+        - asset: assets/fonts/NotoSansDevanagari-Regular.ttf

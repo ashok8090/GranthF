@@ -1,0 +1,677 @@
+import "dart:async";
+import "dart:io";
+
+import "package:app_links/app_links.dart";
+import "package:flutter/material.dart";
+import "package:flutter/services.dart";
+import "package:path/path.dart" as p;
+import "package:path_provider/path_provider.dart";
+import "package:share_plus/share_plus.dart";
+
+import "app_model.dart";
+import "bridge.dart";
+import "nav.dart";
+import "pages.dart";
+import "pdf_maker.dart";
+import "ui.dart";
+
+class GranthApp extends StatefulWidget {
+  const GranthApp({super.key});
+
+  @override
+  State<GranthApp> createState() => _GranthAppState();
+}
+
+class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
+  final stack = <Dest>[Dest.dashboard];
+  final galleryKey = GlobalKey<GalleryPageState>();
+  bool splash = true;
+  bool menu = false;
+  bool settings = false;
+  bool exitAsk = false;
+  bool secret = false;
+  int versionTaps = 0;
+  List<String>? shots;
+  int shotIndex = 0;
+  PdfRequest? pdfAsk;
+  String? pdfStylePick;
+  PdfProgress? pdfProgress;
+  PdfBuilt? pdfDone;
+  PdfRequest? pdfDoneRequest;
+  String? pdfSavedPath;
+  bool pdfBusy = false;
+  bool cancelPdf = false;
+  int lastBack = 0;
+  StreamSubscription<Uri>? links;
+
+  Dest get top => stack.last;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    Future<void>.delayed(const Duration(milliseconds: 2300), () {
+      if (mounted) setState(() => splash = false);
+    });
+    final appLinks = AppLinks();
+    appLinks.getInitialLink().then(openLink);
+    links = appLinks.uriLinkStream.listen(openLink);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    links?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      AppScope.of(context).sync(quiet: true);
+    }
+  }
+
+  void openLink(Uri? uri) {
+    if (uri == null || !mounted) return;
+    final dest = destFromUri(uri);
+    if (dest == null) return;
+    setState(() {
+      if (!dest.same(Dest.dashboard)) stack.add(dest);
+      splash = false;
+    });
+  }
+
+  void go(Dest dest) {
+    setState(() {
+      menu = false;
+      settings = false;
+      if (top.same(dest)) return;
+      stack.add(dest);
+    });
+  }
+
+  void home() {
+    setState(() {
+      stack
+        ..clear()
+        ..add(Dest.dashboard);
+      menu = false;
+    });
+  }
+
+  bool closeOverlay() {
+    if (menu) {
+      setState(() => menu = false);
+      return true;
+    }
+    if (settings) {
+      setState(() => settings = false);
+      return true;
+    }
+    if (shots != null) {
+      setState(() => shots = null);
+      return true;
+    }
+    if (pdfAsk != null) {
+      setState(() => pdfAsk = null);
+      return true;
+    }
+    if (pdfDone != null) {
+      setState(() => pdfDone = null);
+      return true;
+    }
+    return false;
+  }
+
+  void onBack() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - lastBack < 280) return;
+    lastBack = now;
+    if (pdfBusy) {
+      cancelPdf = true;
+      return;
+    }
+    if (closeOverlay()) return;
+    if (exitAsk) {
+      SystemNavigator.pop();
+      return;
+    }
+    if (stack.length > 1) {
+      setState(() => stack.removeLast());
+      return;
+    }
+    setState(() => exitAsk = true);
+  }
+
+  bool headerOn(String which) {
+    final route = top;
+    if (which == "topics") return route.panel == "topics" || (route.panel == "pramans" && route.topicId != null && route.granthId == null);
+    if (which == "granths") return route.panel == "granths" || (route.panel == "pramans" && route.granthId != null);
+    return route.panel == "pramans" && route.topicId == null && route.granthId == null;
+  }
+
+  Future<void> saveImage(String path, String title) async {
+    final app = AppScope.of(context);
+    final bytes = await app.store.bytes(path);
+    if (bytes == null || !mounted) return;
+    final name = pdfFileName(title, "image").replaceAll(".pdf", ".jpg");
+    final item = await app.gallery.save(id: "img-$path", kind: "image", title: title, text: "", topic: "", granth: title, bytes: bytes, fileName: name);
+    await FilesBridge.publish(item.filePath, item.fileName, pictures: true, mime: "image/jpeg");
+    galleryKey.currentState?.reload();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("एल्बम और ऐप गैलरी में सेव हो गया")));
+  }
+
+  Future<void> runPdf(PdfRequest request) async {
+    final app = AppScope.of(context);
+    setState(() {
+      pdfAsk = null;
+      pdfBusy = true;
+      cancelPdf = false;
+      pdfProgress = PdfProgress("चित्र बन रहे हैं", 0, request.leaves.length, 0);
+    });
+    try {
+      final built = await buildPdf(
+        request,
+        load: app.store.bytes,
+        cancelled: () => cancelPdf,
+        onProgress: (progress) {
+          if (mounted) setState(() => pdfProgress = progress);
+        },
+      );
+      final docs = await getApplicationDocumentsDirectory();
+      final folder = Directory(p.join(docs.path, "ready"));
+      await folder.create(recursive: true);
+      final file = File(p.join(folder.path, "${DateTime.now().millisecondsSinceEpoch}-${request.fileName}"));
+      await file.writeAsBytes(built.bytes, flush: true);
+      await FilesBridge.publish(file.path, request.fileName, pictures: false, mime: "application/pdf");
+      await app.markOffline(request.offlineIds);
+      if (!mounted) return;
+      setState(() {
+        pdfBusy = false;
+        pdfProgress = null;
+        pdfDone = built;
+        pdfDoneRequest = request;
+        pdfSavedPath = file.path;
+      });
+    } on PdfCancelled {
+      if (mounted) {
+        setState(() {
+          pdfBusy = false;
+          pdfProgress = null;
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        pdfBusy = false;
+        pdfProgress = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$error")));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) onBack();
+      },
+      child: Stack(
+        children: [
+          ColoredBox(
+            color: cream,
+            child: Column(
+              children: [
+                _mast(app),
+                _sync(app),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutCubic,
+                    child: KeyedSubtree(key: ValueKey(top.key), child: _page(app)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (menu) _menu(),
+          if (shots != null) _lightbox(),
+          if (settings) _settings(app),
+          if (exitAsk) _exit(),
+          if (pdfAsk != null) _pdfPicker(app),
+          if (pdfProgress != null) _pdfRun(),
+          if (pdfDone != null) _pdfCard(),
+          if (splash) _splash(),
+        ],
+      ),
+    );
+  }
+
+  Widget _page(AppModel app) {
+    final dest = top;
+    if (dest.panel == "topics") return TopicPage(go: go, onPdf: (request) => setState(() => pdfAsk = request));
+    if (dest.panel == "granths") {
+      return GranthPage(go: go, onPdf: (request) => setState(() => pdfAsk = request), onOpen: (paths) => setState(() { shots = paths; shotIndex = 0; }), onSaveImage: saveImage);
+    }
+    if (dest.panel == "pramans") {
+      return PramanPage(dest: dest, go: go, onPdf: (request) => setState(() => pdfAsk = request), onOpen: (paths) => setState(() { shots = paths; shotIndex = 0; }), onSaveImage: saveImage);
+    }
+    if (dest.panel == "gallery") return GalleryPage(key: galleryKey);
+    return DashboardPage(go: go);
+  }
+
+  Widget _mast(AppModel app) {
+    Widget stat(String which, String label, int count, Dest dest) {
+      final on = headerOn(which);
+      return Expanded(
+        child: Pressable(
+          onTap: () => go(dest),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: on ? goldLight : const Color(0x55c9a84c)),
+              boxShadow: on ? const [BoxShadow(color: Color(0xccc9a84c), blurRadius: 16)] : null,
+              color: on ? const Color(0x33c9a84c) : const Color(0x22000000),
+            ),
+            child: Column(
+              children: [
+                Text(count == 0 ? "—" : "$count", style: const TextStyle(color: goldLight, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
+                Text(label, textAlign: TextAlign.center, style: const TextStyle(color: goldLight, fontSize: 11, fontFamily: "NotoSansDevanagari")),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [maroon, brown, maroonLight]),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          child: Column(
+            children: [
+              Container(height: 3, margin: const EdgeInsets.only(bottom: 8), decoration: const BoxDecoration(gradient: LinearGradient(colors: [saffronDark, saffron, gold, saffron, saffronDark]))),
+              Row(
+                children: [
+                  Pressable(
+                    onTap: home,
+                    child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.asset("assets/brand/logo.jpg", width: 42, height: 42, fit: BoxFit.cover)),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text("ग्रंथ प्रबंधन", style: TextStyle(color: goldLight, fontSize: 22, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari"))),
+                  Pressable(onTap: () => go(Dest.gallery), child: const Icon(Icons.photo_library_outlined, color: goldLight)),
+                  const SizedBox(width: 2),
+                  Pressable(onTap: () => setState(() => settings = true), child: const Icon(Icons.settings, color: goldLight)),
+                  IconButton(onPressed: () => setState(() => menu = !menu), icon: Icon(menu ? Icons.close : Icons.menu, color: goldLight)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  stat("topics", "विषय / प्रश्नोत्तरी", app.topics.length, Dest.topics),
+                  stat("granths", "पवित्र ग्रन्थ", app.granths.length, Dest.granths),
+                  stat("pramans", "नए प्रमाण", app.pramans.length, Dest.pramans),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sync(AppModel app) {
+    final imageLabel = app.imageTotal == 0
+        ? (app.status == "syncing" ? "सूची सेव हो रही है…" : "")
+        : app.imageRunning
+            ? "पेज सेव हो रहे हैं ${app.imageDone}/${app.imageTotal}"
+            : app.imageDone >= app.imageTotal
+                ? "सभी पेज इस डिवाइस पर सेव हैं"
+                : "सेव पेज ${app.imageDone}/${app.imageTotal}";
+    final line = app.status == "syncing"
+        ? "ऑनलाइन सिंक हो रहा है — सूची डिवाइस पर लिखी जा रही है"
+        : app.error ?? (app.online ? "ऑफलाइन तैयार${app.syncedAt == null ? "" : " · ${hindiWhen(app.syncedAt)}"}" : "इंटरनेट नहीं · सेव किया डेटा चल रहा है");
+    return Container(
+      color: const Color(0xe6f5e6c8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Icon(Icons.circle, size: 8, color: app.online ? const Color(0xff2e7d32) : muted),
+          const SizedBox(width: 6),
+          Expanded(child: Text("$line${imageLabel.isEmpty ? "" : " · $imageLabel"}", style: const TextStyle(color: brown, fontSize: 12, fontFamily: "NotoSansDevanagari"))),
+          Pressable(
+            onTap: app.status == "syncing" ? null : () => app.sync(),
+            child: const Padding(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Text("सिंक", style: TextStyle(color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari"))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _menu() {
+    Widget item(String label, Dest dest, IconData icon) {
+      final on = top.panel == dest.panel && dest.topicId == null;
+      return Pressable(
+        onTap: () => dest.panel == "dashboard" ? home() : go(dest),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(color: on ? const Color(0x22c9a84c) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
+          child: Row(children: [Icon(icon, color: goldLight), const SizedBox(width: 8), Text(label, style: const TextStyle(color: goldLight, fontFamily: "NotoSansDevanagari"))]),
+        ),
+      );
+    }
+
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () => setState(() => menu = false),
+        child: ColoredBox(
+          color: const Color(0x66000000),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
+              onTap: () {},
+              child: Container(
+                width: 240,
+                color: brown,
+                padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    item("Dashboard", Dest.dashboard, Icons.dashboard_outlined),
+                    item("Topics", Dest.topics, Icons.assignment_outlined),
+                    item("Granths", Dest.granths, Icons.menu_book),
+                    item("प्रमाण", Dest.pramans, Icons.image_outlined),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _lightbox() {
+    final paths = shots ?? const <String>[];
+    final index = shotIndex.clamp(0, paths.isEmpty ? 0 : paths.length - 1);
+    return Positioned.fill(
+      child: ColoredBox(
+        color: const Color(0xee1a0c06),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => setState(() => shots = null), child: const Text("बंद", style: TextStyle(color: goldLight)))),
+              Expanded(child: paths.isEmpty ? const SizedBox() : Shot(path: paths[index], height: double.infinity, fit: BoxFit.contain)),
+              if (paths.length > 1)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(onPressed: () => setState(() => shotIndex = (index - 1 + paths.length) % paths.length), icon: const Icon(Icons.chevron_left, color: goldLight)),
+                    Text("${index + 1}/${paths.length}", style: const TextStyle(color: goldLight)),
+                    IconButton(onPressed: () => setState(() => shotIndex = (index + 1) % paths.length), icon: const Icon(Icons.chevron_right, color: goldLight)),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _settings(AppModel app) {
+    Widget block(String title, List<Widget> children) => Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(color: maroon, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: children),
+          ]),
+        );
+    return _sheet(
+      "सेटिंग",
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          block("PDF सेटिंग", [
+            Pill("PDF विषय के साथ", hot: app.pdfStyle == "fill90", onTap: () => app.setPdfStyle("fill90")),
+            Pill("केवल चित्र", hot: app.pdfStyle == "original", onTap: () => app.setPdfStyle("original")),
+          ]),
+          block("लेआउट", [
+            Pill("1×1", hot: app.topicCols == 1 && app.granthCols == 1, onTap: () => app.setCols(topic: 1, granth: 1, praman: 1, gallery: 1)),
+            Pill("2×2", hot: app.granthCols == 2, onTap: () => app.setCols(topic: 2, granth: 2, praman: 2, gallery: 2)),
+          ]),
+          Pressable(
+            onTap: () {
+              versionTaps += 1;
+              if (versionTaps >= 5) setState(() => secret = true);
+            },
+            child: const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text("Version 1.0.0", style: TextStyle(color: brown, fontFamily: "NotoSansDevanagari"))),
+          ),
+          if (secret)
+            block("कार्ड स्टाइल", [
+              for (final look in const [
+                ("combo", "Bento + Clay"),
+                ("classic", "सादा"),
+                ("glass", "Glassmorphism"),
+                ("neu", "Neumorphism"),
+                ("clay", "Claymorphism"),
+                ("material", "Material"),
+                ("flat", "Flat"),
+                ("bento", "Bento"),
+              ])
+                Pill(look.$2, hot: app.look == look.$1, onTap: () => app.setLook(look.$1)),
+            ]),
+        ],
+      ),
+      () => setState(() => settings = false),
+    );
+  }
+
+  Widget _exit() {
+    return _sheet(
+      "क्या आप बाहर निकलना चाहते हैं?",
+      Wrap(
+        spacing: 8,
+        children: [
+          Pill("हाँ, बाहर जाएँ", hot: true, onTap: SystemNavigator.pop),
+          Pill("नहीं", onTap: () => setState(() => exitAsk = false)),
+        ],
+      ),
+      () => setState(() => exitAsk = false),
+    );
+  }
+
+  Widget _pdfPicker(AppModel app) {
+    final request = pdfAsk!;
+    pdfStylePick ??= app.pdfStyle;
+    return _sheet(
+      "PDF शैली",
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(request.title, style: const TextStyle(fontFamily: "NotoSansDevanagari", color: brown)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              Pill("PDF विषय के साथ", hot: pdfStylePick == "fill90", onTap: () => setState(() => pdfStylePick = "fill90")),
+              Pill("केवल चित्र", hot: pdfStylePick == "original", onTap: () => setState(() => pdfStylePick = "original")),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(pdfStylePick == "original" ? "सिर्फ़ मूल चित्र, पूरी गुणवत्ता, कोई लिखावट नहीं" : "बड़ा चित्र, विषय ऊपर और पेज नीचे", style: const TextStyle(color: muted, fontFamily: "NotoSansDevanagari")),
+          const SizedBox(height: 12),
+          Pill("OK", hot: true, onTap: () {
+            final style = pdfStylePick ?? "fill90";
+            app.setPdfStyle(style);
+            final next = PdfRequest(
+              title: request.title,
+              fileName: request.fileName,
+              style: style,
+              leaves: request.leaves,
+              galleryId: request.galleryId,
+              topic: request.topic,
+              granth: request.granth,
+              offlineIds: request.offlineIds,
+            );
+            runPdf(next);
+          }),
+        ],
+      ),
+      () => setState(() => pdfAsk = null),
+    );
+  }
+
+  Widget _pdfRun() {
+    final progress = pdfProgress!;
+    return _sheet(
+      progress.phase,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("${progress.done}/${progress.total} पृष्ठ", style: const TextStyle(fontFamily: "NotoSansDevanagari", color: brown, fontSize: 18)),
+          const SizedBox(height: 6),
+          LinearProgressIndicator(value: progress.total == 0 ? null : progress.done / progress.total, color: maroon, backgroundColor: creamDark),
+          const SizedBox(height: 8),
+          Text("समय ${formatSpan(progress.millis)}", style: const TextStyle(fontFamily: "NotoSansDevanagari", color: muted)),
+          const SizedBox(height: 10),
+          Pill("रोकें", onTap: () => cancelPdf = true),
+        ],
+      ),
+      () => cancelPdf = true,
+    );
+  }
+
+  Widget _pdfCard() {
+    final built = pdfDone!;
+    final request = pdfDoneRequest!;
+    final path = pdfSavedPath;
+    return _sheet(
+      "तैयार",
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("${built.pages} पृष्ठ · ${formatSpan(built.millis)} · ${formatSize(built.bytes.length)}", style: const TextStyle(fontFamily: "NotoSansDevanagari", color: brown)),
+          const SizedBox(height: 6),
+          const Text("Downloads और फ़ाइल मैनेजर में सेव हो गया", style: TextStyle(fontFamily: "NotoSansDevanagari", color: muted)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Pill("शेयर", hot: true, onTap: () {
+                if (path != null) SharePlus.instance.share(ShareParams(files: [XFile(path, mimeType: "application/pdf")], subject: request.title));
+              }),
+              Pill("ऐप में सेव करें", onTap: () async {
+                final app = AppScope.of(context);
+                final yes = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: paper,
+                    title: const Text("क्या आप इस PDF को ऐप गैलरी में सेव करना चाहते हैं?", style: TextStyle(fontFamily: "NotoSansDevanagari", color: maroon)),
+                    content: Text(request.fileName, style: const TextStyle(fontFamily: "NotoSansDevanagari")),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("नहीं")),
+                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("सेव")),
+                    ],
+                  ),
+                );
+                if (yes != true || !mounted) return;
+                await app.gallery.save(
+                  id: request.galleryId,
+                  kind: "pdf",
+                  title: request.title,
+                  text: "",
+                  topic: request.topic,
+                  granth: request.granth,
+                  bytes: built.bytes,
+                  fileName: request.fileName,
+                  preview: built.preview,
+                );
+                galleryKey.currentState?.reload();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ऐप गैलरी में सेव हो गया")));
+                setState(() => pdfDone = null);
+              }),
+              if (path != null) Pill("PDF खोलें", onTap: () => FilesBridge.open(path, "application/pdf")),
+            ],
+          ),
+        ],
+      ),
+      () => setState(() => pdfDone = null),
+    );
+  }
+
+  Widget _sheet(String title, Widget child, VoidCallback close) {
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: close,
+        child: ColoredBox(
+          color: const Color(0x88000000),
+          child: Center(
+            child: GestureDetector(
+              onTap: () {},
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Material(
+                  color: paper,
+                  borderRadius: BorderRadius.circular(22),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: Text(title, style: const TextStyle(color: maroon, fontSize: 20, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari"))),
+                              Pill("पीछे", onTap: close),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          child,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _splash() {
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [maroon, brown])),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(borderRadius: BorderRadius.circular(28), child: Image.asset("assets/brand/logo.jpg", width: 120, height: 120, fit: BoxFit.cover)),
+              const SizedBox(height: 16),
+              const Text("ग्रंथ प्रबंधन", style: TextStyle(color: goldLight, fontSize: 28, fontWeight: FontWeight.w700, fontFamily: "NotoSansDevanagari")),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

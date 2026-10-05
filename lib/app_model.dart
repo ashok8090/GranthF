@@ -26,7 +26,7 @@ class AppModel extends ChangeNotifier {
   int imageTotal = 0;
   bool imageRunning = false;
   bool booted = false;
-  String look = "combo";
+  String look = "classic";
   String pdfStyle = "fill90";
   int topicCols = 1;
   int granthCols = 2;
@@ -39,7 +39,8 @@ class AppModel extends ChangeNotifier {
 
   Future<void> boot() async {
     final prefs = await SharedPreferences.getInstance();
-    look = prefs.getString("granth-look") ?? "classic";
+    final picked = prefs.getBool("granth-look-user") ?? false;
+    look = picked ? (prefs.getString("granth-look") ?? "classic") : "classic";
     pdfStyle = prefs.getString("pdf-style") ?? "fill90";
     topicCols = prefs.getInt("topic-cols") ?? 1;
     granthCols = prefs.getInt("granth-cols") ?? 2;
@@ -151,6 +152,7 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("granth-look", value);
+    await prefs.setBool("granth-look-user", true);
   }
 
   Future<void> setPdfStyle(String value) async {

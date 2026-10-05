@@ -15,6 +15,8 @@ import "pages.dart";
 import "pdf_maker.dart";
 import "ui.dart";
 
+const _navChannel = MethodChannel("com.wnm.granthf/nav");
+
 class GranthApp extends StatefulWidget {
   const GranthApp({super.key});
 
@@ -42,6 +44,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
   bool pdfBusy = false;
   bool cancelPdf = false;
   int lastBack = 0;
+  int exitShownAt = 0;
   StreamSubscription<Uri>? links;
 
   Dest get top => stack.last;
@@ -56,12 +59,16 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
     final appLinks = AppLinks();
     appLinks.getInitialLink().then(openLink);
     links = appLinks.uriLinkStream.listen(openLink);
+    _navChannel.setMethodCallHandler((call) async {
+      if (call.method == "back" && mounted) onBack();
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     links?.cancel();
+    _navChannel.setMethodCallHandler(null);
     super.dispose();
   }
 
@@ -126,14 +133,19 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
 
   void onBack() {
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - lastBack < 280) return;
+    if (now - lastBack < 320) return;
     lastBack = now;
+    if (splash) {
+      setState(() => splash = false);
+      return;
+    }
     if (pdfBusy) {
       cancelPdf = true;
       return;
     }
     if (closeOverlay()) return;
     if (exitAsk) {
+      if (now - exitShownAt < 500) return;
       SystemNavigator.pop();
       return;
     }
@@ -141,6 +153,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
       setState(() => stack.removeLast());
       return;
     }
+    exitShownAt = now;
     setState(() => exitAsk = true);
   }
 
@@ -245,8 +258,13 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
                 _sync(app),
                 Expanded(
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
+                    duration: const Duration(milliseconds: 320),
                     switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final slide = Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero).animate(animation);
+                      return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: child));
+                    },
                     child: KeyedSubtree(key: ValueKey(top.key), child: _page(app)),
                   ),
                 ),
@@ -308,7 +326,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
             ),
             child: Column(
               children: [
-                Text(count == 0 ? "—" : "$count", style: const TextStyle(color: goldLight, fontSize: 20, height: 1.1, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
+                Text(count == 0 ? "\u2014" : "$count", style: const TextStyle(color: goldLight, fontSize: 20, height: 1.1, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
                 Text(label, textAlign: TextAlign.center, style: const TextStyle(color: goldLight, fontSize: 10, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
               ],
             ),
@@ -355,15 +373,15 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
 
   Widget _sync(AppModel app) {
     final imageLabel = app.imageTotal == 0
-        ? (app.status == "syncing" ? "सूची सेव हो रही है…" : "")
+        ? (app.status == "syncing" ? "सूची सेव हो रही है\u2026" : "")
         : app.imageRunning
             ? "पेज सेव हो रहे हैं ${app.imageDone}/${app.imageTotal}"
             : app.imageDone >= app.imageTotal
                 ? "सभी पेज इस डिवाइस पर सेव हैं"
                 : "सेव पेज ${app.imageDone}/${app.imageTotal}";
     final line = app.status == "syncing"
-        ? "ऑनलाइन सिंक हो रहा है — सूची डिवाइस पर लिखी जा रही है"
-        : app.error ?? (app.online ? "ऑफलाइन तैयार${app.syncedAt == null ? "" : " · ${hindiWhen(app.syncedAt)}"}" : "इंटरनेट नहीं · सेव किया डेटा चल रहा है");
+        ? "ऑनलाइन सिंक हो रहा है \u2014 सूची डिवाइस पर लिखी जा रही है"
+        : app.error ?? (app.online ? "ऑफलाइन तैयार${app.syncedAt == null ? "" : " \u00b7 ${hindiWhen(app.syncedAt)}"}" : "इंटरनेट नहीं \u00b7 सेव किया डेटा चल रहा है");
     return Container(
       color: const Color(0xe6f5e6c8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -371,7 +389,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
         children: [
           Icon(Icons.circle, size: 8, color: app.online ? const Color(0xff2e7d32) : muted),
           const SizedBox(width: 6),
-          Expanded(child: Text("$line${imageLabel.isEmpty ? "" : " · $imageLabel"}", style: const TextStyle(color: brown, fontSize: 12, fontFamily: "NotoSansDevanagari"))),
+          Expanded(child: Text("$line${imageLabel.isEmpty ? "" : " \u00b7 $imageLabel"}", style: const TextStyle(color: brown, fontSize: 12, fontFamily: "NotoSansDevanagari"))),
           Pressable(
             onTap: app.status == "syncing" ? null : () => app.sync(),
             child: Container(
@@ -412,7 +430,9 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
           color: const Color(0x66000000),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: GestureDetector(
+            child: SmoothIn(
+              begin: const Offset(-32, 0),
+              child: GestureDetector(
               onTap: () {},
               child: Container(
                 width: 240,
@@ -429,6 +449,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            ),
           ),
         ),
       ),
@@ -439,7 +460,10 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
     final paths = shots ?? const <String>[];
     final index = shotIndex.clamp(0, paths.isEmpty ? 0 : paths.length - 1);
     return Positioned.fill(
-      child: ColoredBox(
+      child: SmoothIn(
+        begin: Offset.zero,
+        duration: const Duration(milliseconds: 220),
+        child: ColoredBox(
         color: const Color(0xee1a0c06),
         child: SafeArea(
           child: Column(
@@ -457,6 +481,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
                 ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -476,35 +501,35 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          block("थीम", [
+            for (final look in const [
+              ("classic", "सादा"),
+              ("combo", "Bento + Clay"),
+              ("glass", "Glassmorphism"),
+              ("neu", "Neumorphism"),
+              ("clay", "Claymorphism"),
+              ("material", "Material"),
+              ("flat", "Flat"),
+              ("bento", "Bento"),
+            ])
+              Pill(look.$2, hot: app.look == look.$1, onTap: () => app.setLook(look.$1)),
+          ]),
           block("PDF सेटिंग", [
             Pill("PDF विषय के साथ", hot: app.pdfStyle == "fill90", onTap: () => app.setPdfStyle("fill90")),
             Pill("केवल चित्र", hot: app.pdfStyle == "original", onTap: () => app.setPdfStyle("original")),
           ]),
           block("लेआउट", [
-            Pill("1×1", hot: app.topicCols == 1 && app.granthCols == 1, onTap: () => app.setCols(topic: 1, granth: 1, praman: 1, gallery: 1)),
-            Pill("2×2", hot: app.granthCols == 2, onTap: () => app.setCols(topic: 2, granth: 2, praman: 2, gallery: 2)),
+            Pill("1\u00d71", hot: app.topicCols == 1 && app.granthCols == 1, onTap: () => app.setCols(topic: 1, granth: 1, praman: 1, gallery: 1)),
+            Pill("2\u00d72", hot: app.granthCols == 2, onTap: () => app.setCols(topic: 2, granth: 2, praman: 2, gallery: 2)),
           ]),
           Pressable(
             onTap: () {
               versionTaps += 1;
               if (versionTaps >= 5) setState(() => secret = true);
             },
-            child: const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text("Version 1.0.0", style: TextStyle(color: brown, fontFamily: "NotoSansDevanagari"))),
+            child: const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text("Version 1.0.2", style: TextStyle(color: brown, fontFamily: "NotoSansDevanagari"))),
           ),
-          if (secret)
-            block("कार्ड स्टाइल", [
-              for (final look in const [
-                ("combo", "Bento + Clay"),
-                ("classic", "सादा"),
-                ("glass", "Glassmorphism"),
-                ("neu", "Neumorphism"),
-                ("clay", "Claymorphism"),
-                ("material", "Material"),
-                ("flat", "Flat"),
-                ("bento", "Bento"),
-              ])
-                Pill(look.$2, hot: app.look == look.$1, onTap: () => app.setLook(look.$1)),
-            ]),
+          if (secret) const Text("डेवलपर मोड", style: TextStyle(color: muted, fontFamily: "NotoSansDevanagari")),
         ],
       ),
       () => setState(() => settings = false),
@@ -596,7 +621,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("${built.pages} पृष्ठ · ${formatSpan(built.millis)} · ${formatSize(built.bytes.length)}", style: const TextStyle(fontFamily: "NotoSansDevanagari", color: brown)),
+          Text("${built.pages} पृष्ठ \u00b7 ${formatSpan(built.millis)} \u00b7 ${formatSize(built.bytes.length)}", style: const TextStyle(fontFamily: "NotoSansDevanagari", color: brown)),
           const SizedBox(height: 6),
           const Text("Downloads और फ़ाइल मैनेजर में सेव हो गया", style: TextStyle(fontFamily: "NotoSansDevanagari", color: muted)),
           const SizedBox(height: 12),
@@ -654,7 +679,9 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
         child: ColoredBox(
           color: const Color(0x88000000),
           child: Center(
-            child: GestureDetector(
+            child: SmoothIn(
+              begin: const Offset(0, 22),
+              child: GestureDetector(
               onTap: () {},
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 460),
@@ -682,6 +709,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
                   ),
                 ),
               ),
+            ),
             ),
           ),
         ),

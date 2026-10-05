@@ -4,8 +4,12 @@ import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -14,6 +18,8 @@ import java.io.File
 import java.io.FileInputStream
 
 class MainActivity : FlutterActivity() {
+    private var backInvoked: OnBackInvokedCallback? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.wnm.granthf/files").setMethodCallHandler { call, result ->
@@ -50,6 +56,46 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        hookBack()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hookBack()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
+    @Deprecated("Back is owned by the app until the exit card confirms.")
+    override fun onBackPressed() {
+        sendBackToFlutter()
+    }
+
+    private fun hookBack() {
+        if (Build.VERSION.SDK_INT < 33) return
+        backInvoked?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+        val callback = OnBackInvokedCallback { sendBackToFlutter() }
+        backInvoked = callback
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY, callback)
+    }
+
+    private fun sendBackToFlutter() {
+        val engine = flutterEngine ?: return
+        MethodChannel(engine.dartExecutor.binaryMessenger, "com.wnm.granthf/nav").invokeMethod("back", null)
+    }
+
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            backInvoked?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+        }
+        super.onDestroy()
     }
 
     private fun publish(path: String, name: String, mime: String, pictures: Boolean): Boolean {

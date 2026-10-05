@@ -84,7 +84,7 @@ Map<String, Object> _fitJpeg(Map<String, Object> args) {
   if (decoded == null) {
     return {"b": raw, "w": 0, "h": 0};
   }
-  var img = decoded;
+  var img = im.bakeOrientation(decoded);
   final longest = img.width > img.height ? img.width : img.height;
   if (longest > maxSide) {
     img = img.width >= img.height ? im.copyResize(img, width: maxSide) : im.copyResize(img, height: maxSide);
@@ -105,36 +105,67 @@ Future<({Uint8List bytes, int w, int h})?> fitJpeg(List<int> raw, {required int 
   return (bytes: bytes, w: w, h: h);
 }
 
-Future<Uint8List> _paragraphPng({
+Future<_RasterText> _paragraphPng({
   required String text,
   required double width,
   required double size,
   required Color color,
-  required int maxLines,
   TextAlign align = TextAlign.center,
-  double? minHeight,
 }) async {
   await ensureDevanagari();
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
+  const heightFactor = 1.48;
   final builder = ui.ParagraphBuilder(
     ui.ParagraphStyle(
       fontFamily: "NotoSansDevanagari",
       fontSize: size,
-      maxLines: maxLines,
-      ellipsis: "…",
       textAlign: align,
-      height: 1.28,
+      height: heightFactor,
     ),
-  )..pushStyle(ui.TextStyle(fontFamily: "NotoSansDevanagari", fontSize: size, color: color, height: 1.28));
+  )..pushStyle(ui.TextStyle(fontFamily: "NotoSansDevanagari", fontSize: size, color: color, height: heightFactor));
   builder.addText(text.trim().isEmpty ? " " : text.trim());
   final paragraph = builder.build()..layout(ui.ParagraphConstraints(width: width));
-  final height = (minHeight ?? paragraph.height).clamp(paragraph.height, size * maxLines * 1.45);
-  canvas.drawParagraph(paragraph, Offset.zero);
-  final image = await recorder.endRecording().toImage(width.ceil(), height.ceil().clamp(1, 4000));
+  final padTop = size * 0.34;
+  final padBottom = size * 0.5;
+  final height = paragraph.height + padTop + padBottom;
+  canvas.drawParagraph(paragraph, Offset(0, padTop));
+  final image = await recorder.endRecording().toImage(width.ceil(), height.ceil().clamp(1, 12000));
   final data = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
-  return data!.buffer.asUint8List();
+  return _RasterText(data!.buffer.asUint8List(), width.ceil(), height.ceil());
+}
+
+class _RasterText {
+  final Uint8List bytes;
+  final int w;
+  final int h;
+  const _RasterText(this.bytes, this.w, this.h);
+}
+
+Future<_RasterText> _fitText({
+  required String text,
+  required double contentW,
+  required double maxH,
+  required double startPt,
+  required Color color,
+}) async {
+  const pxW = 1800.0;
+  var pt = startPt;
+  _RasterText? last;
+  while (pt >= 10) {
+    final png = await _paragraphPng(text: text, width: pxW, size: pt * (pxW / contentW), color: color);
+    last = png;
+    final pdfH = contentW * png.h / png.w;
+    if (pdfH <= maxH) return png;
+    pt -= 0.7;
+  }
+  return last!;
+}
+
+double _pdfTextHeight(_RasterText? png, double contentW) {
+  if (png == null || png.w <= 0) return 0;
+  return contentW * png.h / png.w;
 }
 
 Future<Uint8List> topicCoverPng(String title, String body) async {
@@ -192,7 +223,7 @@ Future<PdfBuilt> buildPdf(
   }
 
   final original = request.style == "original";
-  final prepared = <({Uint8List? image, int w, int h, Uint8List? header, Uint8List? footer, bool cover})>[];
+  final prepared = <({Uint8List? image, int w, int h, _RasterText? header, _RasterText? footer, bool cover})>[];
   final total = request.leaves.length;
   for (var i = 0; i < request.leaves.length; i++) {
     if (cancelled()) throw PdfCancelled();
@@ -212,16 +243,26 @@ Future<PdfBuilt> buildPdf(
       if (shot != null) prepared.add((image: shot.bytes, w: shot.w, h: shot.h, header: null, footer: null, cover: false));
       continue;
     }
+    final landscape = shot != null && shot.w > shot.h * 1.02;
+    final format = landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4;
+    final contentW = format.width - 36;
+    final contentH = format.height - 36;
+    final textBudget = shot == null ? contentH * 0.86 : contentH * 0.46;
     final headerText = (leaf.body.isNotEmpty ? leaf.body : (leaf.subtitle.isNotEmpty ? leaf.subtitle : leaf.title));
     final footerBits = <String>[
       if (leaf.body.isNotEmpty) leaf.title,
       if (leaf.meta.isNotEmpty && leaf.meta != "आवरण") leaf.meta,
       if (leaf.body.isEmpty && leaf.subtitle.isNotEmpty) leaf.subtitle,
     ].where((bit) => bit.trim().isNotEmpty && bit.trim() != "आवरण");
-    final header = await _paragraphPng(text: headerText, width: 1000, size: 34, color: const Color(0xff7b1f2e), maxLines: 3);
-    final footer = footerBits.isEmpty
+    final footerText = footerBits.join("\n");
+    final headerShare = footerText.trim().isEmpty ? textBudget : textBudget * 0.62;
+    final footerShare = textBudget - headerShare;
+    final header = headerText.trim().isEmpty
         ? null
-        : await _paragraphPng(text: footerBits.join("\n"), width: 1000, size: 24, color: const Color(0xff4a2c0a), maxLines: 2);
+        : await _fitText(text: headerText, contentW: contentW, maxH: headerShare, startPt: 15, color: const Color(0xff7b1f2e));
+    final footer = footerText.trim().isEmpty
+        ? null
+        : await _fitText(text: footerText, contentW: contentW, maxH: footerShare, startPt: 12.5, color: const Color(0xff4a2c0a));
     prepared.add((image: shot?.bytes, w: shot?.w ?? 0, h: shot?.h ?? 0, header: header, footer: footer, cover: false));
     await Future<void>.delayed(Duration.zero);
   }
@@ -251,36 +292,87 @@ Future<PdfBuilt> buildPdf(
     } else if (original && page.image != null) {
       preview ??= page.image;
       final landscape = page.w > page.h * 1.05;
+      final format = landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4;
       doc.addPage(pw.Page(
-        pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(10),
-        build: (_) => pw.Center(child: pw.Image(pw.MemoryImage(page.image!), fit: pw.BoxFit.contain)),
+        pageFormat: format,
+        margin: pw.EdgeInsets.zero,
+        build: (_) {
+          const inset = 10.0;
+          final boxW = format.width - inset * 2;
+          final boxH = format.height - inset * 2;
+          var drawW = boxW;
+          var drawH = page.w == 0 ? boxH : boxW * page.h / page.w;
+          if (drawH > boxH) {
+            drawH = boxH;
+            drawW = page.h == 0 ? boxW : boxH * page.w / page.h;
+          }
+          return pw.Center(child: pw.Image(pw.MemoryImage(page.image!), width: drawW, height: drawH));
+        },
       ));
     } else {
-      preview ??= page.image ?? page.header;
+      preview ??= page.image ?? page.header?.bytes;
       final landscape = page.w > page.h * 1.02 && page.w > 0;
+      final format = landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4;
       final number = pageNo;
       doc.addPage(pw.Page(
-        pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
-        pageTheme: pw.PageTheme(margin: const pw.EdgeInsets.fromLTRB(18, 14, 18, 22), theme: pw.ThemeData.withFont(base: latin)),
-        build: (_) => pw.Column(children: [
-          if (page.header != null) pw.Image(pw.MemoryImage(page.header!), height: landscape ? 64 : 86, fit: pw.BoxFit.contain),
-          pw.SizedBox(height: 6),
-          pw.Expanded(
-            child: pw.Container(
-              decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.black, width: page.image == null ? 0 : 0.6)),
-              child: page.image == null ? pw.SizedBox() : pw.Center(child: pw.Image(pw.MemoryImage(page.image!), fit: pw.BoxFit.contain)),
+        pageFormat: format,
+        margin: pw.EdgeInsets.zero,
+        pageTheme: pw.PageTheme(theme: pw.ThemeData.withFont(base: latin)),
+        build: (_) {
+          const left = 18.0;
+          const top = 14.0;
+          const right = 18.0;
+          const bottom = 16.0;
+          final contentW = format.width - left - right;
+          final contentH = format.height - top - bottom;
+          var headerH = _pdfTextHeight(page.header, contentW);
+          var footerH = _pdfTextHeight(page.footer, contentW);
+          var headerW = page.header == null ? 0.0 : contentW;
+          var footerW = page.footer == null ? 0.0 : contentW;
+          const gap = 6.0;
+          const numH = 14.0;
+          final room = contentH - gap * 2 - numH;
+          final maxText = room - 72 < 40 ? 40.0 : room - 72;
+          if (headerH + footerH > maxText && headerH + footerH > 0) {
+            final scale = maxText / (headerH + footerH);
+            headerH *= scale;
+            footerH *= scale;
+            headerW *= scale;
+            footerW *= scale;
+          }
+          final imageH = room - headerH - footerH;
+          var drawW = contentW;
+          var drawH = page.w <= 0 ? imageH : contentW * page.h / page.w;
+          if (drawH > imageH) {
+            drawH = imageH;
+            drawW = page.h <= 0 ? contentW : imageH * page.w / page.h;
+          }
+          return pw.Padding(
+            padding: const pw.EdgeInsets.fromLTRB(left, top, right, bottom),
+            child: pw.Column(
+              children: [
+                if (page.header != null) pw.SizedBox(width: contentW, height: headerH, child: pw.Center(child: pw.Image(pw.MemoryImage(page.header!.bytes), width: headerW, height: headerH))),
+                if (page.header != null) pw.SizedBox(height: gap),
+                pw.Container(
+                  width: contentW,
+                  height: imageH < 1 ? 1 : imageH,
+                  decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.black, width: page.image == null ? 0 : 0.6)),
+                  alignment: pw.Alignment.center,
+                  child: page.image == null ? pw.SizedBox() : pw.Image(pw.MemoryImage(page.image!), width: drawW, height: drawH),
+                ),
+                if (page.footer != null) pw.SizedBox(height: gap),
+                if (page.footer != null) pw.SizedBox(width: contentW, height: footerH, child: pw.Center(child: pw.Image(pw.MemoryImage(page.footer!.bytes), width: footerW, height: footerH))),
+                pw.SizedBox(
+                  height: numH,
+                  child: pw.Align(
+                    alignment: pw.Alignment.centerRight,
+                    child: pw.Text("$number", style: pw.TextStyle(font: latin, fontSize: 11, color: PdfColor.fromInt(0xff7b1f2e))),
+                  ),
+                ),
+              ],
             ),
-          ),
-          if (page.footer != null) ...[
-            pw.SizedBox(height: 4),
-            pw.Image(pw.MemoryImage(page.footer!), height: landscape ? 36 : 48, fit: pw.BoxFit.contain),
-          ],
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Text("$number", style: pw.TextStyle(font: latin, fontSize: 11, color: PdfColor.fromInt(0xff7b1f2e))),
-          ),
-        ]),
+          );
+        },
       ));
     }
     report("पृष्ठ जुड़ रहे हैं", pageNo, prepared.length);

@@ -326,7 +326,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
             ),
             child: Column(
               children: [
-                Text(count == 0 ? "\u2014" : "$count", style: const TextStyle(color: goldLight, fontSize: 20, height: 1.1, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
+                Text(count == 0 ? "—" : "$count", style: const TextStyle(color: goldLight, fontSize: 20, height: 1.1, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
                 Text(label, textAlign: TextAlign.center, style: const TextStyle(color: goldLight, fontSize: 10, fontWeight: FontWeight.w400, fontFamily: "NotoSansDevanagari")),
               ],
             ),
@@ -373,15 +373,15 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
 
   Widget _sync(AppModel app) {
     final imageLabel = app.imageTotal == 0
-        ? (app.status == "syncing" ? "सूची सेव हो रही है\u2026" : "")
+        ? (app.status == "syncing" ? "सूची सेव हो रही है…" : "")
         : app.imageRunning
             ? "पेज सेव हो रहे हैं ${app.imageDone}/${app.imageTotal}"
             : app.imageDone >= app.imageTotal
                 ? "सभी पेज इस डिवाइस पर सेव हैं"
                 : "सेव पेज ${app.imageDone}/${app.imageTotal}";
     final line = app.status == "syncing"
-        ? "ऑनलाइन सिंक हो रहा है \u2014 सूची डिवाइस पर लिखी जा रही है"
-        : app.error ?? (app.online ? "ऑफलाइन तैयार${app.syncedAt == null ? "" : " \u00b7 ${hindiWhen(app.syncedAt)}"}" : "इंटरनेट नहीं \u00b7 सेव किया डेटा चल रहा है");
+        ? "ऑनलाइन सिंक हो रहा है — सूची डिवाइस पर लिखी जा रही है"
+        : app.error ?? (app.online ? "ऑफलाइन तैयार${app.syncedAt == null ? "" : " · ${hindiWhen(app.syncedAt)}"}" : "इंटरनेट नहीं · सेव किया डेटा चल रहा है");
     return Container(
       color: const Color(0xe6f5e6c8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -389,7 +389,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
         children: [
           Icon(Icons.circle, size: 8, color: app.online ? const Color(0xff2e7d32) : muted),
           const SizedBox(width: 6),
-          Expanded(child: Text("$line${imageLabel.isEmpty ? "" : " \u00b7 $imageLabel"}", style: const TextStyle(color: brown, fontSize: 12, fontFamily: "NotoSansDevanagari"))),
+          Expanded(child: Text("$line${imageLabel.isEmpty ? "" : " · $imageLabel"}", style: const TextStyle(color: brown, fontSize: 12, fontFamily: "NotoSansDevanagari"))),
           Pressable(
             onTap: app.status == "syncing" ? null : () => app.sync(),
             child: Container(
@@ -519,8 +519,8 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
             Pill("केवल चित्र", hot: app.pdfStyle == "original", onTap: () => app.setPdfStyle("original")),
           ]),
           block("लेआउट", [
-            Pill("1\u00d71", hot: app.topicCols == 1 && app.granthCols == 1, onTap: () => app.setCols(topic: 1, granth: 1, praman: 1, gallery: 1)),
-            Pill("2\u00d72", hot: app.granthCols == 2, onTap: () => app.setCols(topic: 2, granth: 2, praman: 2, gallery: 2)),
+            Pill("1×1", hot: app.topicCols == 1 && app.granthCols == 1, onTap: () => app.setCols(topic: 1, granth: 1, praman: 1, gallery: 1)),
+            Pill("2×2", hot: app.granthCols == 2, onTap: () => app.setCols(topic: 2, granth: 2, praman: 2, gallery: 2)),
           ]),
           Pressable(
             onTap: () {
@@ -621,7 +621,7 @@ class _GranthAppState extends State<GranthApp> with WidgetsBindingObserver {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("${built.pages} पृष्ठ \u00b7 ${formatSpan(built.millis)} \u00b7 ${formatSize(built.bytes.length)}", style: const TextStyle(fontFamily: "NotoSansDevanagari", color: brown)),
+          Text("${built.pages} पृष्ठ · ${formatSpan(built.millis)} · ${formatSize(built.bytes.length)}", style: const TextStyle(fontFamily: "NotoSansDevanagari", color: brown)),
           const SizedBox(height: 6),
           const Text("Downloads और फ़ाइल मैनेजर में सेव हो गया", style: TextStyle(fontFamily: "NotoSansDevanagari", color: muted)),
           const SizedBox(height: 12),

@@ -1,19 +1,23 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="ग्रंथ प्रबंधन"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:enableOnBackInvokedCallback="false">
+        android:enableOnBackInvokedCallback="false"
+        tools:replace="android:enableOnBackInvokedCallback">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:taskAffinity="com.wnm.granth_f"
+            android:alwaysRetainTaskState="true"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:enableOnBackInvokedCallback="false">
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
@@ -26,13 +30,17 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="granth" />
+                <data android:scheme="granth" android:host="open" />
             </intent-filter>
-            <intent-filter android:autoVerify="false">
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="granth.grok.me" />
+                <data android:scheme="https" android:host="granth.grok.me" android:pathPrefix="/pramans" />
+                <data android:scheme="https" android:host="granth.grok.me" android:pathPrefix="/topics" />
+                <data android:scheme="https" android:host="granth.grok.me" android:pathPrefix="/granths" />
+                <data android:scheme="https" android:host="granth.grok.me" android:pathPrefix="/gallery" />
+                <data android:scheme="https" android:host="granth.grok.me" android:pathPrefix="/open" />
             </intent-filter>
         </activity>
         <provider

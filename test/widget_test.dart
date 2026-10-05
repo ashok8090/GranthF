@@ -1,5 +1,6 @@
 import "package:flutter_test/flutter_test.dart";
 import "package:granth_f/models.dart";
+import "package:granth_f/nav.dart";
 import "package:granth_f/order.dart";
 
 Praman row(String id, String title) => Praman(
@@ -28,5 +29,21 @@ void main() {
     ], "कबीर सागर");
     expect(sorted.first.id, "1");
     expect(sorted.last.id, "2");
+  });
+
+  test("share links open the matching page", () {
+    final proof = destFromUri(Uri.parse("https://granth.grok.me/pramans?id=42"));
+    expect(proof?.panel, "pramans");
+    expect(proof?.pramanId, "42");
+
+    final topic = destFromUri(Uri.parse("https://granth.grok.me/#/pramans?topic=t1"));
+    expect(topic?.topicId, "t1");
+
+    final book = destFromUri(Uri.parse("granth://open/pramans?granth=g7"));
+    expect(book?.granthId, "g7");
+    expect(book?.panel, "pramans");
+
+    expect(destFromUri(Uri.parse("https://granth.grok.me/gallery"))?.panel, "gallery");
+    expect(destFromUri(Uri.parse("granth://open"))?.panel, "dashboard");
   });
 }
